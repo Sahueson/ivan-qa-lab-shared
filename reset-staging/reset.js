@@ -126,7 +126,62 @@ async function seed(sb, ids) {
   });
   if (pollError) throw new Error(`foe_polls: ${pollError.message}`);
 
-  return { events: events.length, registrations: 3, polls: 1, leaves: 1 };
+  const sanctions = await seedSanctions(sb, ids);
+  return { events: events.length, registrations: 3, polls: 1 + sanctions, leaves: 1 };
+}
+
+// Suite E (gobernanza): expedientes de sanción de la Junta Directiva ya preparados para que el
+// test solo tenga que emitir el último voto. Directiva = superadmin, admin_foe y junta2; el
+// propuesto para sanción queda recusado (Art. 53.4) y no cuenta para el cuórum.
+async function seedSanctions(sb, ids) {
+  const sanction = (target, severity) => ({
+    profileId: ids[target], severity, penalty: "apercibimiento", suspensionMonths: null,
+    infractionDate: day(-1), ruleArticle: "Art. 51.i — Seed QA", reason: "Expediente de prueba del seed.",
+  });
+  const expedientes = [
+    // junta2 es el propuesto: ve el aviso de recusación y no puede votar.
+    { key: "recusacion", title: "QA · Sanción a QA Junta 2 (recusación)", target: "junta2", severity: "leve", votes: [] },
+    // Recusado admin_foe; habilitados superadmin (ya votó) y junta2 -> su voto cierra.
+    { key: "cuorum", title: "QA · Sanción con cuórum pendiente", target: "admin_foe", severity: "leve",
+      votes: [["superadmin", 0]] },
+    // player_foe ya tiene 2 leves en el año -> la 3ª se escala a Grave (Art. 51.k).
+    { key: "escalado_leve", title: "QA · Tercera falta leve", target: "player_foe", severity: "leve",
+      votes: [["superadmin", 0], ["admin_foe", 0]] },
+    // superadmin ya tiene 2 graves -> la 3ª se escala a Muy Grave (Art. 50.m).
+    { key: "escalado_grave", title: "QA · Tercera falta grave", target: "superadmin", severity: "grave",
+      votes: [["admin_foe", 0]] },
+    // Mayoría en contra -> se cierra sin sanción.
+    { key: "desestimada", title: "QA · Sanción a desestimar", target: "player_foe", severity: "leve",
+      votes: [["superadmin", 1], ["admin_foe", 1]] },
+  ];
+
+  const { data: polls, error } = await sb.from("foe_polls").insert(expedientes.map((e) => ({
+    board: "junta_directiva", topic_type: "sancion", title: e.title,
+    description: "Expediente de prueba del seed.",
+    options: ["A favor de sancionar", "En contra de sancionar"],
+    sanction_data: sanction(e.target, e.severity), is_anonymous: false, status: "open",
+    created_by: ids.admin_foe,
+  }))).select("id, title");
+  if (error) throw new Error(`foe_polls (sanciones): ${error.message}`);
+  const pollId = (title) => polls.find((p) => p.title === title).id;
+
+  const votes = expedientes.flatMap((e) =>
+    e.votes.map(([voter, option]) => ({ poll_id: pollId(e.title), profile_id: ids[voter], option_index: option })));
+  const { error: voteError } = await sb.from("foe_poll_votes").insert(votes);
+  if (voteError) throw new Error(`foe_poll_votes: ${voteError.message}`);
+
+  // Faltas previas dentro de los últimos 365 días para los escalados.
+  const falta = (target, severity, offset) => ({
+    profile_id: ids[target], severity, reason: "Falta previa del seed", infraction_date: day(offset),
+    status: "active", rule_article: "Art. 51 — Seed QA", issued_by: ids.admin_foe,
+  });
+  const { error: infError } = await sb.from("foe_infractions").insert([
+    falta("player_foe", "leve", -30), falta("player_foe", "leve", -60),
+    falta("superadmin", "grave", -40), falta("superadmin", "grave", -90),
+  ]);
+  if (infError) throw new Error(`foe_infractions: ${infError.message}`);
+
+  return expedientes.length;
 }
 
 async function reset({ log = console.log } = {}) {
@@ -137,7 +192,7 @@ async function reset({ log = console.log } = {}) {
   await wipe(sb);
   log(`Vaciadas: ${DATA_TABLES.join(", ")}`);
   const counts = await seed(sb, ids);
-  log(`Seed: ${counts.events} eventos, ${counts.registrations} inscripciones, ${counts.leaves} excedencia, ${counts.polls} votación`);
+  log(`Seed: ${counts.events} eventos, ${counts.registrations} inscripciones, ${counts.leaves} excedencia, ${counts.polls} votaciones`);
 }
 
 module.exports = { reset };
