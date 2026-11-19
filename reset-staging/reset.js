@@ -80,6 +80,9 @@ function seedEvents(ids) {
       date: day(-3), hour: "09:00", created_by: ids.admin_foe },
     { key: "mad_excedencia", ...base, title: "QA MAD · Partida en excedencia", squad: "MAD Irregulars",
       date: day(14), hour: "09:00", created_by: ids.admin_mad },
+    // Suite D (asistencia): MilSim ya jugada (pesa 1,5).
+    { key: "foe_milsim_pasada", ...base, title: "QA FOE · MilSim pasada", squad: "FOE",
+      event_type: "milsim", attendance_weight: 1.5, date: day(-10), hour: "08:00", created_by: ids.admin_foe },
   ];
 }
 
@@ -98,18 +101,30 @@ async function seed(sb, ids) {
     return { event_id, profile_id: ids[key], team: p.team_label || "Camuflaje", role: p.role || "asalto",
       status: "confirmed", attended };
   };
+  // Asistencia esperada en FOE (partidas computables: finalizada 1, pasada abierta 1, MilSim
+  // pasada 1,5 = 3,5): player_foe 1/3,5 = 29 %; junta2 1,5/2,5 = 60 % (su excedencia descuenta
+  // la pasada abierta).
   const { error: regError } = await sb.from("event_registrations").insert([
     reg(ev.foe_menos_48h, "player_foe"),
     reg(ev.foe_finalizada, "player_foe", true),
     reg(ev.foe_finalizada, "admin_foe", true),
+    reg(ev.foe_pasada, "player_foe"),
+    reg(ev.foe_milsim_pasada, "junta2", true),
   ]);
   if (regError) throw new Error(`event_registrations: ${regError.message}`);
 
-  // Excedencia aprobada de player_mad que cubre "QA MAD · Partida en excedencia" (TC-C03).
-  const { error: leaveError } = await sb.from("player_leaves").insert({
-    profile_id: ids.player_mad, squad: "ALL", start_date: day(13), end_date: day(40),
-    reason: "Excedencia QA", status: "approved",
-  });
+  const leave = (key, start, end, reason, status) =>
+    ({ profile_id: ids[key], squad: "ALL", start_date: day(start), end_date: day(end), reason, status });
+  const leaves = [
+    // Aprobada de player_mad que cubre "QA MAD · Partida en excedencia" (TC-C03).
+    leave("player_mad", 13, 40, "Excedencia QA", "approved"),
+    // Aprobada de junta2 que cubre "QA FOE · Partida pasada abierta": no computa (TC-D03).
+    leave("junta2", -4, -2, "Excedencia QA pasada", "approved"),
+    // Suite F: solicitud pendiente de un jugador y otra propia de un miembro de la Junta.
+    leave("player_foe", 100, 140, "Solicitud QA pendiente", "pending"),
+    leave("admin_foe", 100, 140, "Solicitud QA propia", "pending"),
+  ];
+  const { error: leaveError } = await sb.from("player_leaves").insert(leaves);
   if (leaveError) throw new Error(`player_leaves: ${leaveError.message}`);
 
   // Votación general de la Junta Directiva (un MAD no debe verla).
@@ -127,7 +142,7 @@ async function seed(sb, ids) {
   if (pollError) throw new Error(`foe_polls: ${pollError.message}`);
 
   const sanctions = await seedSanctions(sb, ids);
-  return { events: events.length, registrations: 3, polls: 1 + sanctions, leaves: 1 };
+  return { events: events.length, registrations: 5, polls: 1 + sanctions, leaves: leaves.length };
 }
 
 // Suite E (gobernanza): expedientes de sanción de la Junta Directiva ya preparados para que el
@@ -192,7 +207,7 @@ async function reset({ log = console.log } = {}) {
   await wipe(sb);
   log(`Vaciadas: ${DATA_TABLES.join(", ")}`);
   const counts = await seed(sb, ids);
-  log(`Seed: ${counts.events} eventos, ${counts.registrations} inscripciones, ${counts.leaves} excedencia, ${counts.polls} votaciones`);
+  log(`Seed: ${counts.events} eventos, ${counts.registrations} inscripciones, ${counts.leaves} excedencias, ${counts.polls} votaciones`);
 }
 
 module.exports = { reset };
