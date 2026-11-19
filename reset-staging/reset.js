@@ -125,6 +125,16 @@ async function reset({ log = console.log } = {}) {
 
 module.exports = { reset };
 
+// Ejecutado suelto (npm run reset-staging) también reserva el staging mientras resetea.
+// Las suites de tests reservan por su cuenta (global-setup) y llaman a reset() dentro.
 if (require.main === module) {
-  reset().catch((e) => { console.error(e.message ?? e); process.exit(1); });
+  const { acquireStagingLock } = require("./lock");
+  (async () => {
+    const release = await acquireStagingLock();
+    try {
+      await reset();
+    } finally {
+      await release();
+    }
+  })().catch((e) => { console.error(e.message ?? e); process.exit(1); });
 }
