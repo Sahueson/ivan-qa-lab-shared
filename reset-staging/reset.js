@@ -1,7 +1,7 @@
 // Deja el staging en un estado conocido antes de una ejecución de tests:
 //   1. asegura los 8 usuarios QA (contraseña y perfil),
 //   2. vacía las tablas de datos,
-//   3. carga el seed (eventos, inscripciones y una votación de la Junta Directiva).
+//   3. carga el seed (eventos, inscripciones, una excedencia y una votación de la Junta Directiva).
 // Idempotente. Las fechas son relativas a hoy para que las reglas temporales (48 h,
 // partidas finalizadas) se cumplan siempre.
 //
@@ -70,6 +70,16 @@ function seedEvents(ids) {
       date: lt48.date, hour: lt48.hour, created_by: ids.admin_foe },
     { key: "foe_finalizada", ...base, title: "QA FOE · Partida finalizada", squad: "FOE",
       date: day(-7), hour: "09:00", created_by: ids.admin_foe },
+    // Suite C (inscripciones): partidas propias para no chocar con las que la suite B modifica.
+    { key: "foe_inscripcion", ...base, title: "QA FOE · Inscripción abierta", squad: "FOE",
+      uniform: "Tiger Stripe", date: day(12), hour: "09:00", created_by: ids.admin_foe },
+    { key: "foe_cancelada", ...base, title: "QA FOE · Partida cancelada", squad: "FOE",
+      is_cancelled: true, count_attendance: false, cancel_reason: "Seed QA",
+      date: day(8), hour: "09:00", created_by: ids.admin_foe },
+    { key: "foe_pasada", ...base, title: "QA FOE · Partida pasada abierta", squad: "FOE",
+      date: day(-3), hour: "09:00", created_by: ids.admin_foe },
+    { key: "mad_excedencia", ...base, title: "QA MAD · Partida en excedencia", squad: "MAD Irregulars",
+      date: day(14), hour: "09:00", created_by: ids.admin_mad },
   ];
 }
 
@@ -95,6 +105,13 @@ async function seed(sb, ids) {
   ]);
   if (regError) throw new Error(`event_registrations: ${regError.message}`);
 
+  // Excedencia aprobada de player_mad que cubre "QA MAD · Partida en excedencia" (TC-C03).
+  const { error: leaveError } = await sb.from("player_leaves").insert({
+    profile_id: ids.player_mad, squad: "ALL", start_date: day(13), end_date: day(40),
+    reason: "Excedencia QA", status: "approved",
+  });
+  if (leaveError) throw new Error(`player_leaves: ${leaveError.message}`);
+
   // Votación general de la Junta Directiva (un MAD no debe verla).
   const { error: pollError } = await sb.from("foe_polls").insert({
     board: "junta_directiva",
@@ -109,7 +126,7 @@ async function seed(sb, ids) {
   });
   if (pollError) throw new Error(`foe_polls: ${pollError.message}`);
 
-  return { events: events.length, registrations: 3, polls: 1 };
+  return { events: events.length, registrations: 3, polls: 1, leaves: 1 };
 }
 
 async function reset({ log = console.log } = {}) {
@@ -120,7 +137,7 @@ async function reset({ log = console.log } = {}) {
   await wipe(sb);
   log(`Vaciadas: ${DATA_TABLES.join(", ")}`);
   const counts = await seed(sb, ids);
-  log(`Seed: ${counts.events} eventos, ${counts.registrations} inscripciones, ${counts.polls} votación`);
+  log(`Seed: ${counts.events} eventos, ${counts.registrations} inscripciones, ${counts.leaves} excedencia, ${counts.polls} votación`);
 }
 
 module.exports = { reset };
