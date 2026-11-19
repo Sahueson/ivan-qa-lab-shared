@@ -1,2 +1,5 @@
 node_modules
 .env*
+
+# Volcados del esquema de PROD/staging: sensibles, solo en local
+reset-staging/schema*.sql
