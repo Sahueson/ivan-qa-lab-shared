@@ -68,7 +68,48 @@ async function finishRun(result) {
   await rest("PATCH", activeRun, { status: "finished", finished_at: now() });
 }
 
-module.exports = { startRun, sendEvent, finishRun, failRun };
+// ---------- Evidencias (bucket público `evidence` del lab) ----------
+// Solo capturas de pantalla: nunca trazas, vídeos ni logs (llevan contraseña y tokens).
+const EVIDENCE_BUCKET = "evidence";
+const EVIDENCE_RETENTION_DAYS = 14;
+
+async function storage(method, path, body, contentType = "application/json") {
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/${path}`, {
+    method,
+    headers: {
+      apikey: SUPABASE_SERVICE_KEY,
+      Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+      "Content-Type": contentType,
+      "x-upsert": "true",
+    },
+    body: contentType === "application/json" && body ? JSON.stringify(body) : body,
+  });
+  if (!res.ok) throw new Error(`storage ${method} ${path} -> ${res.status} ${await res.text()}`);
+  return res.json().catch(() => null);
+}
+
+// Sube una captura y devuelve su URL pública. name: nombre de fichero sin carpeta.
+async function uploadEvidence(name, buffer, contentType = "image/jpeg") {
+  const objectPath = `runs/${RUN_ID}/${name}`;
+  await storage("POST", `object/${EVIDENCE_BUCKET}/${objectPath}`, buffer, contentType);
+  return `${SUPABASE_URL}/storage/v1/object/public/${EVIDENCE_BUCKET}/${objectPath}`;
+}
+
+// Borra las evidencias de runs con más de EVIDENCE_RETENTION_DAYS días (plan gratis: 1 GB).
+async function pruneEvidence() {
+  const cutoff = new Date(Date.now() - EVIDENCE_RETENTION_DAYS * 86_400_000).toISOString();
+  const oldRuns = await fetch(`${SUPABASE_URL}/rest/v1/runs?select=id&created_at=lt.${cutoff}`, {
+    headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` },
+  }).then((r) => r.json());
+  for (const { id } of oldRuns) {
+    const objects = await storage("POST", `object/list/${EVIDENCE_BUCKET}`, { prefix: `runs/${id}`, limit: 1000 });
+    const paths = (objects ?? []).map((o) => `runs/${id}/${o.name}`);
+    if (paths.length) await storage("DELETE", `object/${EVIDENCE_BUCKET}`, { prefixes: paths });
+    await rest("PATCH", `test_results?run_id=eq.${id}&evidence_url=not.is.null`, { evidence_url: null });
+  }
+}
+
+module.exports = { startRun, sendEvent, finishRun, failRun, uploadEvidence, pruneEvidence };
 
 if (require.main === module) {
   const [cmd, a, b] = process.argv.slice(2);
