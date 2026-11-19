@@ -1,10 +1,11 @@
 {
   "name": "ivan-qa-lab-shared",
   "version": "1.0.0",
-  "description": "",
+  "description": "Utilidades compartidas de Ivan QA Lab: envío de resultados a Supabase y reset del staging",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "reset-staging": "node reset-staging/reset.js",
+    "create-users": "node reset-staging/create-users.js"
   },
   "keywords": [],
   "author": "",

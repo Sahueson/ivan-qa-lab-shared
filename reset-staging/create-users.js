@@ -1,43 +1,55 @@
+// Crea (o resetea) los 8 usuarios QA del staging y sus perfiles. Idempotente.
+// Uso: set -a; source ~/.qa-lab.env; set +a; node reset-staging/create-users.js
 const { createClient } = require("@supabase/supabase-js");
-const { STG_URL, STG_SECRET_KEY, QA_PASSWORD } = process.env;
 
-if (!STG_URL || !STG_SECRET_KEY || !QA_PASSWORD) {
-  console.error("Faltan STG_URL, STG_SECRET_KEY o QA_PASSWORD");
-  process.exit(1);
-}
-if (!STG_URL.includes("rpxdxitntsmgcbbnuyox")) {
-  console.error("STOP: esta URL no es la del staging");
-  process.exit(1);
-}
-
+const STAGING_REF = "rpxdxitntsmgcbbnuyox";
 const users = require("./users.json");
-const sb = createClient(STG_URL, STG_SECRET_KEY, { auth: { persistSession: false } });
 
-async function main() {
+// Cliente con service key, solo si la URL es la del staging.
+function stagingClient() {
+  const { STG_URL, STG_SECRET_KEY, QA_PASSWORD } = process.env;
+  if (!STG_URL || !STG_SECRET_KEY || !QA_PASSWORD) {
+    throw new Error("Faltan STG_URL, STG_SECRET_KEY o QA_PASSWORD");
+  }
+  if (!STG_URL.includes(STAGING_REF)) {
+    throw new Error("STOP: esta URL no es la del staging");
+  }
+  return createClient(STG_URL, STG_SECRET_KEY, { auth: { persistSession: false } });
+}
+
+// Devuelve { key -> id } de los usuarios QA.
+async function ensureUsers(sb, { log = console.log } = {}) {
   const { data: list, error: listError } = await sb.auth.admin.listUsers({ perPage: 1000 });
   if (listError) throw listError;
 
+  const ids = {};
   for (const u of users) {
     let id = list.users.find((x) => x.email === u.email)?.id;
     if (!id) {
       const { data, error } = await sb.auth.admin.createUser({
         email: u.email,
-        password: QA_PASSWORD,
+        password: process.env.QA_PASSWORD,
         email_confirm: true,
         user_metadata: { nickname: u.nickname },
       });
       if (error) throw error;
       id = data.user.id;
     } else {
-      const { error } = await sb.auth.admin.updateUserById(id, { password: QA_PASSWORD });
+      const { error } = await sb.auth.admin.updateUserById(id, { password: process.env.QA_PASSWORD });
       if (error) throw error;
     }
     const { error } = await sb
       .from("profiles")
       .upsert({ id, email: u.email, nickname: u.nickname, ...u.profile });
     if (error) throw error;
-    console.log("OK", u.key, u.email);
+    ids[u.key] = id;
+    log("OK", u.key, u.email);
   }
+  return ids;
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+module.exports = { stagingClient, ensureUsers, STAGING_REF };
+
+if (require.main === module) {
+  ensureUsers(stagingClient()).catch((e) => { console.error(e.message ?? e); process.exit(1); });
+}
