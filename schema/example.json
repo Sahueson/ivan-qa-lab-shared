@@ -1,0 +1,14 @@
+{
+  "tool": "playwright",
+  "target": "tactical-calendar",
+  "suite": "a-auth",
+  "started_at": "2026-11-19T10:00:00.000Z",
+  "finished_at": "2026-11-19T10:00:42.000Z",
+  "duration_ms": 42000,
+  "summary": { "total": 3, "passed": 2, "failed": 1, "skipped": 0 },
+  "tests": [
+    { "name": "TC-A01 Login exitoso", "status": "passed", "duration_ms": 8200, "role": "Jugador FOE", "error": null, "evidence_url": null },
+    { "name": "TC-A02 Bloqueo usuario isBlocked", "status": "passed", "duration_ms": 6100, "role": "Bloqueado", "error": null, "evidence_url": null },
+    { "name": "TC-A03 Edición de ficha", "status": "failed", "duration_ms": 12000, "role": "Jugador FOE", "error": "Expected 'Fusilero' but got 'Médico'", "evidence_url": null }
+  ]
+}
