@@ -243,10 +243,12 @@ async function reset({ log = console.log } = {}) {
 module.exports = { reset };
 
 // Ejecutado suelto (npm run reset-staging) también reserva el staging mientras resetea.
-// Las suites de tests reservan por su cuenta (global-setup) y llaman a reset() dentro.
+// Las suites de tests reservan por su cuenta (global-setup o with-staging.js) y llaman a reset()
+// dentro; con QA_LOCK_HELD=1 (lo pone with-staging.js) la reserva ya es del proceso padre.
 if (require.main === module) {
   const { acquireStagingLock } = require("./lock");
   (async () => {
+    if (process.env.QA_LOCK_HELD === "1") return reset();
     const release = await acquireStagingLock();
     try {
       await reset();
