@@ -2,7 +2,7 @@
 //   1. asegura los 8 usuarios QA (contraseña y perfil),
 //   2. vacía las tablas de datos,
 //   3. carga el seed (eventos, inscripciones, una excedencia y una votación de la Junta Directiva).
-// Idempotente. Las fechas son relativas a hoy para que las reglas temporales (48 h,
+// También: partidas cerradas/por editar (suite B) y días sin partida (suite H). Idempotente. Las fechas son relativas a hoy para que las reglas temporales (48 h,
 // partidas finalizadas) se cumplan siempre.
 //
 // Uso: set -a; source ~/.qa-lab.env; set +a; node reset-staging/reset.js
@@ -47,7 +47,20 @@ async function assertOnlyQaProfiles(sb) {
   }
 }
 
+// Los PDF de Normas viven en el bucket privado team-documents: se borran los ficheros de las
+// filas que se van a vaciar, para no dejar huérfanos en Storage (plan gratis).
+async function wipeDocumentFiles(sb) {
+  const { data, error } = await sb.from("team_documents").select("file_path");
+  if (error) throw new Error(`team_documents: ${error.message}`);
+  const paths = data.map((d) => d.file_path).filter(Boolean);
+  if (!paths.length) return 0;
+  const { error: rmError } = await sb.storage.from("team-documents").remove(paths);
+  if (rmError) throw new Error(`team-documents (storage): ${rmError.message}`);
+  return paths.length;
+}
+
 async function wipe(sb) {
+  await wipeDocumentFiles(sb);
   for (const table of DATA_TABLES) {
     const { error } = await sb.from(table).delete().not("id", "is", null);
     if (error) throw new Error(`${table}: ${error.message}`);
@@ -83,6 +96,14 @@ function seedEvents(ids) {
     // Suite D (asistencia): MilSim ya jugada (pesa 1,5).
     { key: "foe_milsim_pasada", ...base, title: "QA FOE · MilSim pasada", squad: "FOE",
       event_type: "milsim", attendance_weight: 1.5, date: day(-10), hour: "08:00", created_by: ids.admin_foe },
+    // Suite B (edición, borrado y desbloqueo): partidas MAD, que no cuentan en el % FOE de la D.
+    { key: "mad_editar", ...base, title: "QA MAD · Partida a editar", squad: "MAD Irregulars",
+      date: day(16), hour: "09:00", created_by: ids.admin_mad },
+    { key: "mad_eliminar", ...base, title: "QA MAD · Partida a eliminar", squad: "MAD Irregulars",
+      date: day(30), hour: "09:00", created_by: ids.admin_mad },
+    { key: "mad_cerrada", ...base, title: "QA MAD · Partida cerrada", squad: "MAD Irregulars",
+      date: day(-5), hour: "09:00", created_by: ids.admin_mad,
+      attendance_locked: true, locked_by: ids.admin_mad, locked_at: new Date().toISOString() },
   ];
 }
 
@@ -110,6 +131,7 @@ async function seed(sb, ids) {
     reg(ev.foe_finalizada, "admin_foe", true),
     reg(ev.foe_pasada, "player_foe"),
     reg(ev.foe_milsim_pasada, "junta2", true),
+    reg(ev.mad_cerrada, "player_mad", true),
   ]);
   if (regError) throw new Error(`event_registrations: ${regError.message}`);
 
@@ -141,8 +163,16 @@ async function seed(sb, ids) {
   });
   if (pollError) throw new Error(`foe_polls: ${pollError.message}`);
 
+  // Suite H (calendario): un día sin partida por equipo, lejos de las fechas de las partidas.
+  const blackouts = [
+    { squad: "FOE", start_date: day(25), end_date: day(26), reason: "QA · Sin partida FOE", created_by: ids.admin_foe },
+    { squad: "MAD Irregulars", start_date: day(27), end_date: day(27), reason: "QA · Sin partida MAD", created_by: ids.admin_mad },
+  ];
+  const { error: boError } = await sb.from("team_blackouts").insert(blackouts);
+  if (boError) throw new Error(`team_blackouts: ${boError.message}`);
+
   const sanctions = await seedSanctions(sb, ids);
-  return { events: events.length, registrations: 5, polls: 1 + sanctions, leaves: leaves.length };
+  return { events: events.length, registrations: 6, polls: 1 + sanctions, leaves: leaves.length };
 }
 
 // Suite E (gobernanza): expedientes de sanción de la Junta Directiva ya preparados para que el

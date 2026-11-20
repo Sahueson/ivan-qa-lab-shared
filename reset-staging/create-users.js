@@ -18,6 +18,10 @@ function stagingClient() {
 }
 
 // Devuelve { key -> id } de los usuarios QA.
+// Campos que users.json solo pone cuando no son el valor por defecto. Se fijan siempre para que
+// un test que bloquea o asciende a alguien (suite G) no deje el cambio para la siguiente ejecución.
+const PROFILE_DEFAULTS = { is_blocked: false, is_super_admin: false };
+
 async function ensureUsers(sb, { log = console.log } = {}) {
   const { data: list, error: listError } = await sb.auth.admin.listUsers({ perPage: 1000 });
   if (listError) throw listError;
@@ -40,7 +44,7 @@ async function ensureUsers(sb, { log = console.log } = {}) {
     }
     const { error } = await sb
       .from("profiles")
-      .upsert({ id, email: u.email, nickname: u.nickname, ...u.profile });
+      .upsert({ id, email: u.email, nickname: u.nickname, ...PROFILE_DEFAULTS, ...u.profile });
     if (error) throw error;
     ids[u.key] = id;
     log("OK", u.key, u.email);

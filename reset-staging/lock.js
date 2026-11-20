@@ -6,7 +6,10 @@
 const os = require("os");
 
 const LAB_REF = "exukogfrnsivvibcqejl";
-const TTL_SECONDS = 600;          // caduca sola si el proceso muere (igual que el timeout del workflow)
+// La reserva caduca sola a los TTL_SECONDS si el proceso muere; mientras vive se renueva cada
+// RENEW_MS, así una ejecución larga (la suite completa pasa de 10 min) no la pierde a mitad.
+const TTL_SECONDS = 180;
+const RENEW_MS = 60_000;
 const DEFAULT_WAIT_MS = 5 * 60_000;
 const POLL_MS = 5_000;
 
@@ -50,7 +53,12 @@ async function acquireStagingLock({ holder = defaultHolder(), waitMs = DEFAULT_W
     const [row] = await rpc("acquire_staging_lock", { p_holder: holder, p_ttl_seconds: TTL_SECONDS });
     if (row?.acquired) {
       log(`Staging reservado por ${holder}`);
-      return () => releaseStagingLock(holder);
+      const timer = setInterval(() => renew(holder, log), RENEW_MS);
+      timer.unref(); // no mantiene vivo el proceso
+      return async () => {
+        clearInterval(timer);
+        await releaseStagingLock(holder);
+      };
     }
     if (Date.now() >= deadline) {
       throw new Error(`Staging ocupado por ${row?.holder} hasta ${row?.expires_at}; inténtalo más tarde`);
@@ -60,6 +68,16 @@ async function acquireStagingLock({ holder = defaultHolder(), waitMs = DEFAULT_W
       warned = true;
     }
     await sleep(POLL_MS);
+  }
+}
+
+// Volver a pedir la reserva con el mismo holder la renueva (acquire_staging_lock lo permite).
+async function renew(holder, log) {
+  try {
+    const [row] = await rpc("acquire_staging_lock", { p_holder: holder, p_ttl_seconds: TTL_SECONDS });
+    if (!row?.acquired) log(`AVISO: se perdió la reserva del staging; ahora la tiene ${row?.holder}`);
+  } catch (e) {
+    log(`AVISO: no se pudo renovar la reserva del staging: ${e.message}`);
   }
 }
 
