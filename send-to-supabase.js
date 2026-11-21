@@ -39,9 +39,24 @@ const startRun = () =>
 const sendEvent = (type, message) =>
   rest("POST", "run_events", { run_id: RUN_ID, type, message, created_at: now() });
 
+// Avisa a la web de que el entorno puede haberse liberado: lanza el siguiente run en cola, si lo hay. La URL es pública
+// (el endpoint es idempotente y no acepta datos). Si el staging aún está reservado responde "busy": se reintenta unos segundos.
+async function notifyQueue() {
+  const base = process.env.QA_LAB_WEB_URL || "https://ivan-qa-lab-web.vercel.app";
+  for (let i = 0; i < 4; i++) {
+    try {
+      const r = await fetch(`${base}/api/runs/advance`, { method: "POST", signal: AbortSignal.timeout(8000) });
+      const j = await r.json();
+      if (j.started || j.reason !== "busy") return;
+    } catch { return; }
+    await new Promise((res) => setTimeout(res, 5000));
+  }
+}
+
 async function failRun(reason) {
   if (reason) await sendEvent("log", `ERROR: ${reason}`).catch(() => {});
   await rest("PATCH", activeRun, { status: "failed", finished_at: now() });
+  await notifyQueue();
 }
 
 // Repetible: si GitHub relanza el job, se sustituyen los resultados en vez de fallar por duplicado.
@@ -66,6 +81,7 @@ async function finishRun(result) {
     pass_rate: Math.round((summary.passed / summary.total) * 1000) / 10,
   }, "resolution=merge-duplicates,return=minimal");
   await rest("PATCH", activeRun, { status: "finished", finished_at: now() });
+  await notifyQueue();
 }
 
 // ---------- Evidencias (bucket público `evidence` del lab) ----------
