@@ -1,6 +1,6 @@
 # api-cases: fuente única de los casos de API y rendimiento
 
-`spec.js` define los 57 casos TC-API01..58 (suites a-auth ... i-normas, los mismos dominios que Playwright).
+`spec.js` define los 57 casos TC-A01..I06 (suites a-auth ... i-normas, los mismos dominios que Playwright).
 Desde ahí se generan los ficheros de **qa-newman** (colección Postman), **qa-bruno** (.bru), **qa-karate** (.feature)
 y **qa-jmeter** (plan.jmx + cases.json con los 16 casos de carga y sus umbrales de p95).
 
