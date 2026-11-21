@@ -32,7 +32,12 @@ const cleanBody = (b) => {
   return text.length > 3000 ? text.slice(0, 3000) + "… (recortado)" : text;
 };
 const cleanHeaders = (h) => Object.fromEntries(Object.entries(h || {}).filter(([k]) => !HIDE_HEADERS.test(k)));
-const cleanEvidence = (e) => ({
+// Emails e ids de usuario (UUID) fuera de la evidencia, en cualquier parte del texto (cuerpos, URL...).
+const maskIds = (txt) => txt
+  .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+.[A-Za-z]{2,}/g, "***@***")
+  .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, "<id>");
+const cleanEvidence = (e) => JSON.parse(maskIds(JSON.stringify(cleanEvidence0(e))));
+const cleanEvidence0 = (e) => ({
   ...e,
   ...(e.request ? { request: { ...e.request, headers: cleanHeaders(e.request.headers), body: cleanBody(e.request.body) } } : {}),
   ...(e.response ? { response: { ...e.response, headers: undefined, body: cleanBody(e.response.body) } } : {}),
