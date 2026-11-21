@@ -24,11 +24,16 @@ const mask = (s) => {
 };
 const leaks = (s) => { JWT.lastIndex = 0; return (pwd && s.includes(pwd)) || JWT.test(s); };
 
-const B64 = /(<script id="playwrightReportBase64"[^>]*>)data:application\/zip;base64,([A-Za-z0-9+/=]+)(<\/script>)/;
+// Playwright lo guarda en <template id="playwrightReportBase64"> (versiones antiguas: <script>).
+const B64 = /(<(?:template|script) id="playwrightReportBase64"[^>]*>)data:application\/zip;base64,([A-Za-z0-9+/=]+)(<\/(?:template|script)>)/;
 
 async function maskZipBase64(html) {
   const m = html.match(B64);
-  if (!m) return html;
+  if (!m) {
+    // Fail-closed: si el informe dice llevar el zip y no se reconoce, no se publica.
+    if (html.includes('id="playwrightReportBase64"')) throw new Error("Informe de Playwright con un formato que no sé abrir: no se publica");
+    return html;
+  }
   const zip = await JSZip.loadAsync(m[2], { base64: true });
   for (const name of Object.keys(zip.files)) {
     const f = zip.files[name];
