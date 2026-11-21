@@ -145,8 +145,9 @@ const bodyOf = (c) => (c.login ? { email: emails[c.login], password: '{{qa_passw
       if (authed(c)) out += `    And header Authorization = 'Bearer ' + session.token${NL}`;
       Object.entries(c.headers || {}).forEach(([k, v]) => { out += `    And header ${k} = '${v}'${NL}`; });
       const b = c.login ? { email: emails[c.login], password: '#(qaPassword)' } : c.body;
-      if (b) out += `    And request ${JSON.stringify(b).replace(/"#\(qaPassword\)"/, "'#(qaPassword)'")}${NL}`;
+      if (b) out += `    * def reqBody = ${JSON.stringify(b).replace(/"#\(qaPassword\)"/, "'#(qaPassword)'")}${NL}    And request reqBody${NL}`;
       out += `    When method ${c.method.toLowerCase()}${NL}`;
+      out += `    * def ev = ({ request: { method: '${c.method}', url: baseUrl + '${p}', body: ${b ? 'reqBody' : 'null'} }, response: { status: responseStatus, time_ms: responseTime, body: response } })${NL}    * karate.embed(karate.toString(ev), 'application/json')${NL}`;
       out += `    * def err = check(${JSON.stringify(spec1)}, responseStatus, response)${NL}    Then match err == ''${NL}${NL}`;
     });
     write(path.join(dir, 'features', `${s}.feature`), out);

@@ -82,7 +82,7 @@ async function storage(method, path, body, contentType = "application/json") {
       "Content-Type": contentType,
       "x-upsert": "true",
     },
-    body: contentType === "application/json" && body ? JSON.stringify(body) : body,
+    body: contentType === "application/json" && body && !Buffer.isBuffer(body) && typeof body !== "string" ? JSON.stringify(body) : body,
   });
   if (!res.ok) throw new Error(`storage ${method} ${path} -> ${res.status} ${await res.text()}`);
   return res.json().catch(() => null);
