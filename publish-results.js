@@ -11,37 +11,7 @@ const path = require("path");
 
 const slug = (s) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()
   .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
-const redact = (s) => {
-  const pwd = process.env.QA_PASSWORD;
-  return s && pwd ? s.split(pwd).join("***") : s;
-};
-
-// Evidencia de las pruebas de API/carga (sin captura): petición y respuesta como JSON. Se limpia aquí, en un único sitio:
-// fuera cabeceras con claves/sesión, fuera contraseñas y tokens, y el cuerpo se recorta.
-const HIDE_HEADERS = /^(apikey|authorization|cookie|set-cookie|x-api-key|proxy-authorization)$/i;
-const HIDE_FIELDS = /^(password|access_token|refresh_token|token|provider_token|provider_refresh_token)$/i;
-const cleanBody = (b) => {
-  if (b == null) return null;
-  let text = typeof b === "string" ? b : JSON.stringify(b);
-  try {
-    const walk = (v) => Array.isArray(v) ? v.map(walk) : v && typeof v === "object"
-      ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, HIDE_FIELDS.test(k) ? "***" : walk(x)])) : v;
-    text = JSON.stringify(walk(JSON.parse(text)));
-  } catch { /* no es JSON: se deja como texto */ }
-  text = redact(text);
-  return text.length > 3000 ? text.slice(0, 3000) + "… (recortado)" : text;
-};
-const cleanHeaders = (h) => Object.fromEntries(Object.entries(h || {}).filter(([k]) => !HIDE_HEADERS.test(k)));
-// Emails e ids de usuario (UUID) fuera de la evidencia, en cualquier parte del texto (cuerpos, URL...).
-const maskIds = (txt) => txt
-  .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+.[A-Za-z]{2,}/g, "***@***")
-  .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, "<id>");
-const cleanEvidence = (e) => JSON.parse(maskIds(JSON.stringify(cleanEvidence0(e))));
-const cleanEvidence0 = (e) => ({
-  ...e,
-  ...(e.request ? { request: { ...e.request, headers: cleanHeaders(e.request.headers), body: cleanBody(e.request.body) } } : {}),
-  ...(e.response ? { response: { ...e.response, headers: undefined, body: cleanBody(e.response.body) } } : {}),
-});
+const { redact, cleanEvidence } = require("./sanitize");
 
 (async () => {
   const file = process.argv[2];
