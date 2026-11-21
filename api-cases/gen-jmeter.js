@@ -41,6 +41,12 @@ const suites = {
     { id: 'PERF-15', name: 'Documentos del equipo (jugador MAD)', role: 'Jugador MAD', user: 'player_mad', path: '/rest/v1/team_documents?select=id,title,category', limit: 1200 },
     { id: 'PERF-16', name: 'Ping keep_alive', role: 'Anónimo', user: null, path: '/rest/v1/keep_alive?select=id&id=eq.1', limit: 800 },
   ],
+  // Demo de fallos: umbrales irreales (fallan a propósito) para enseñar cómo sale un incumplimiento de rendimiento.
+  'j-demo-fallos': [
+    { id: 'PERF-17', name: 'Lectura del perfil en menos de 20 ms (umbral irreal)', role: 'Jugador MAD', user: 'player_mad', path: '/rest/v1/profiles?select=nickname&limit=1', limit: 20 },
+    { id: 'PERF-18', name: 'Partidas del super admin en menos de 30 ms (umbral irreal)', role: 'Super Admin', user: 'superadmin', path: '/rest/v1/events?select=id,squad', limit: 30 },
+    { id: 'PERF-19', name: 'Ping keep_alive en menos de 10 ms (umbral irreal)', role: 'Anónimo', user: null, path: '/rest/v1/keep_alive?select=id&id=eq.1', limit: 10 },
+  ],
 };
 
 const label = (c) => `${c.id} ${c.name}`;

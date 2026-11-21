@@ -83,4 +83,10 @@ module.exports = [
     { id: 'TC-I05', name: 'TC-I05 El bucket de normas es privado', role: 'Anónimo', method: 'GET', path: '/storage/v1/object/public/team-documents/qa-no-existe.pdf', status: [400, 404] },
     { id: 'TC-I06', name: 'TC-I06 El ping keep_alive responde', role: 'Anónimo', method: 'GET', path: '/rest/v1/keep_alive?select=id&id=eq.1', status: [200], nonEmpty: true },
   ]),
+  // Demo de fallos: casos que FALLAN A PROPÓSITO (requisitos que la API no cumple) para enseñar cómo sale un fallo.
+  ...S('j-demo-fallos', [
+    { id: 'TC-J01', name: 'TC-J01 Un anónimo ve la lista de partidas (requisito inexistente)', role: 'Anónimo', method: 'GET', path: '/rest/v1/events?select=id', status: [200], nonEmpty: true },
+    { id: 'TC-J02', name: 'TC-J02 El jugador MAD crea una partida en FOE (requisito inexistente)', role: 'Jugador MAD', method: 'POST', path: '/rest/v1/events', auth: 'player_mad', body: { title: 'QA demo', squad: 'FOE', date: '2030-01-01', hour: '10:00', field: 'x', event_type: 'normal' }, status: [201] },
+    { id: 'TC-J03', name: 'TC-J03 El endpoint de estadísticas de partidas responde 200', role: 'Anónimo', method: 'GET', path: '/rest/v1/event_stats?select=id', status: [200] },
+  ]),
 ];
