@@ -54,6 +54,10 @@ const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e
     if (!TEXT.test(file)) continue;
     let text = fs.readFileSync(file, "utf8");
     text = await maskZipBase64(text);
+    // Informe de Playwright: modo claro por defecto (si no, sigue el tema del sistema y sale negro). Quien elija otro tema lo conserva.
+    if (/(^|[\/])index\.html$/i.test(file) && text.includes('playwrightReportBase64') && !text.includes('data-qa-light')) {
+      text = text.replace('<head>', '<head><script data-qa-light>try{if(!localStorage.theme)localStorage.theme="light-mode"}catch(e){}</script>');
+    }
     fs.writeFileSync(file, mask(text));
   }
 
