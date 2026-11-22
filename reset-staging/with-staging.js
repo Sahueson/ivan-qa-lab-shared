@@ -26,6 +26,7 @@ const log = (msg) => console.log(`[staging] ${msg}`);
     code = await new Promise((resolve) => {
       const child = spawn(cmd[0], cmd.slice(1), {
         stdio: "inherit",
+        shell: process.platform === "win32", // en Windows npx es un .cmd
         env: { ...process.env, QA_LOCK_HELD: "1", QA_LOCK_HOLDER: holder },
       });
       // Si cancelan el job (GitHub manda SIGINT/SIGTERM), se para el hijo y se libera igual.
