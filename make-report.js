@@ -26,10 +26,20 @@ const rows = result.tests.map((t) => {
     evidence += `<details><summary>Petición y respuesta</summary><pre>${esc(JSON.stringify(cleanEvidence(t.evidence_data), null, 2))}</pre></details>`;
   }
   const shot = t.evidence_path && path.resolve(baseDir, t.evidence_path);
-  if (shot && fs.existsSync(shot)) {
+  if (shot && fs.existsSync(shot) && !(Array.isArray(t.steps) && t.steps.length)) {
     const name = `img/${slug(t.name)}.jpg`;
     fs.copyFileSync(shot, path.join(outDir, name));
     evidence += `<details><summary>Captura</summary><img src="${name}" alt="Captura de ${esc(t.name)}" loading="lazy"></details>`;
+  }
+  if (Array.isArray(t.steps) && t.steps.length) {
+    const figs = t.steps.map((st, i) => {
+      const src = st.path && path.resolve(baseDir, st.path);
+      if (!src || !fs.existsSync(src)) return "";
+      const name = `img/${slug(t.name)}-${i + 1}${path.extname(src) || ".png"}`;
+      fs.copyFileSync(src, path.join(outDir, name));
+      return `<figure><a href="${name}" target="_blank" rel="noreferrer"><img src="${name}" alt="${esc(st.title)}" loading="lazy"></a><figcaption>${i + 1}. ${esc(st.title)}</figcaption></figure>`;
+    }).join("");
+    if (figs) evidence += `<div class="steps">${figs}</div>`;
   }
   if (t.error) evidence += `<pre class="err">${esc(clean(t.error)).slice(0, 2000)}</pre>`;
   return `<tr class="${t.status}"><td><span class="tag ${t.status}">${label[t.status] ?? t.status}</span></td>
@@ -54,7 +64,10 @@ td{padding:12px 14px;border-top:1px solid var(--line);vertical-align:top}tr:firs
 .tag.passed{background:#10b98122;color:#059669}.tag.failed{background:#ef444422;color:#dc2626}.tag.skipped{background:#f59e0b22;color:#d97706}
 small{color:var(--mut)}details{margin-top:6px}summary{cursor:pointer;color:var(--mut);font-size:13px}
 pre{background:#0d0d0d;color:#d6d6d6;padding:12px;border-radius:12px;overflow:auto;font-size:12px;white-space:pre-wrap;word-break:break-word}pre.err{color:#fca5a5}
-img{max-width:100%;border:1px solid var(--line);border-radius:12px;margin-top:6px}footer{margin-top:24px;color:var(--mut);font-size:12px}
+img{max-width:100%;border:1px solid var(--line);border-radius:12px;margin-top:6px}.steps{display:flex;flex-wrap:wrap;gap:12px;margin-top:10px}figure{margin:0;width:150px}figure img{width:100%;margin-top:0}figcaption{font-size:12px;color:var(--mut);margin-top:4px}
+.env{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px 18px;margin-bottom:24px}.env h2{margin:0 0 10px;font-size:15px}
+.env dl{margin:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 20px}.env dt{font-size:12px;color:var(--mut)}.env dd{margin:0;font-weight:600}
+footer{margin-top:24px;color:var(--mut);font-size:12px}
 </style></head><body><main>
 <h1>${esc(title || `Informe de ${result.tool}`)}</h1>
 <p class="sub">Suite <strong>${esc(result.suite)}</strong> · ${esc(result.target)} · ${new Date(result.finished_at).toLocaleString("es-ES", { timeZone: "Europe/Madrid" })} · ${(result.duration_ms / 1000).toFixed(1)} s</p>
@@ -64,6 +77,7 @@ img{max-width:100%;border:1px solid var(--line);border-radius:12px;margin-top:6p
 <div class="kpi"><b>${failed}</b><span>Fallan</span></div>
 <div class="kpi"><b>${skipped}</b><span>Omitidos</span></div>
 </section>
+${Array.isArray(result.meta) && result.meta.length ? `<section class="env"><h2>Entorno</h2><dl>${result.meta.map((m) => `<div><dt>${esc(m.label)}</dt><dd>${esc(m.value)}</dd></div>`).join("")}</dl></section>` : ""}
 <table><tbody>
 ${rows}
 </tbody></table>
