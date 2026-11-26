@@ -10,6 +10,7 @@
 const { spawn } = require("child_process");
 const { acquireStagingLock, defaultHolder } = require("./lock");
 const { reset } = require("./reset");
+const live = require("../live-events");
 
 const log = (msg) => console.log(`[staging] ${msg}`);
 
@@ -19,10 +20,13 @@ const log = (msg) => console.log(`[staging] ${msg}`);
   if (!cmd.length) throw new Error("Uso: node with-staging.js -- <comando de tests>");
 
   const holder = defaultHolder();
+  live.emit("log", "Reservando el entorno de pruebas (solo admite una ejecución a la vez)");
   const release = await acquireStagingLock({ holder, log });
   let code = 1;
   try {
+    live.emit("log", "Restaurando los datos de prueba");
     await reset({ log });
+    live.emit("log", "Entorno listo: arrancan las pruebas");
     code = await new Promise((resolve) => {
       const child = spawn(cmd[0], cmd.slice(1), {
         stdio: "inherit",
@@ -37,6 +41,8 @@ const log = (msg) => console.log(`[staging] ${msg}`);
   } finally {
     await release();
     log("Staging liberado");
+    live.emit("log", "Pruebas terminadas: entorno liberado");
+    await live.flush();
   }
   process.exit(code);
 })().catch((e) => { console.error(e.message ?? e); process.exit(1); });
