@@ -32,7 +32,8 @@ const parsers = {
     plan: () => selectedCases().length,
     line(l) {
       let m;
-      if ((m = l.match(/^└ (TC-.+?)\s*$/))) return [["test_started", m[1]]];
+      // El símbolo de cabecera cambia según el sistema (└ en Windows, otro en Linux): vale cualquiera sin sangría.
+      if ((m = l.match(/^[^\s\w]\s+(TC-.+?)\s*$/))) return [["test_started", m[1]]];
       if ((m = l.match(/^\s+[√✓]\s+(TC-.+?)\s*$/))) return [["test_passed", m[1]]];
       if ((m = l.match(/^\s+-\s+\[skipped\]\s+(TC-.+?)\s*$/))) return [["test_skipped", m[1]]];
       if ((m = l.match(/^\s+\d+\.\s+(TC-.+?)\s*$/))) return [["test_failed", m[1]]];
