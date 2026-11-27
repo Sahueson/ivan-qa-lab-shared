@@ -55,8 +55,13 @@ const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e
     let text = fs.readFileSync(file, "utf8");
     text = await maskZipBase64(text);
     // Informe de Playwright: siempre en modo claro al abrirlo (el tema se guarda en localStorage, que comparten todos los informes de sahueson.github.io: un tema oscuro de otra visita o el modo oscuro forzado del navegador lo dejaban negro). Se puede cambiar a mano dentro de la sesión.
-    if (/(^|[\/])index\.html$/i.test(file) && text.includes('playwrightReportBase64') && !text.includes('data-qa-light')) {
+    if (/(^|[\\/])index\.html$/i.test(file) && text.includes('playwrightReportBase64') && !text.includes('data-qa-light')) {
       text = text.replace('<head>', '<head><meta name="color-scheme" content="only light"><style>:root{color-scheme:only light}</style><script data-qa-light>try{localStorage.theme="light-mode"}catch(e){}</script>');
+    }
+    // Informe de Newman (htmlextra): arranca en oscuro salvo que localStorage.theme sea "theme-light". Mismo almacenamiento y misma clave que el de Playwright
+    // (que usa "light-mode"), así que cada informe fija su propio valor claro al abrirse.
+    if (/(^|[\\/])index\.html$/i.test(file) && text.includes("localStorage.getItem('theme') === 'theme-light'") && !text.includes('data-qa-light')) {
+      text = text.replace('<head>', '<head><meta name="color-scheme" content="only light"><script data-qa-light>try{localStorage.setItem("theme","theme-light")}catch(e){}</script>');
     }
     fs.writeFileSync(file, mask(text));
   }
