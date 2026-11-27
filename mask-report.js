@@ -54,9 +54,9 @@ const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e
     if (!TEXT.test(file)) continue;
     let text = fs.readFileSync(file, "utf8");
     text = await maskZipBase64(text);
-    // Informe de Playwright: modo claro por defecto (si no, sigue el tema del sistema y sale negro). Quien elija otro tema lo conserva.
+    // Informe de Playwright: siempre en modo claro al abrirlo (el tema se guarda en localStorage, que comparten todos los informes de sahueson.github.io: un tema oscuro de otra visita o el modo oscuro forzado del navegador lo dejaban negro). Se puede cambiar a mano dentro de la sesión.
     if (/(^|[\/])index\.html$/i.test(file) && text.includes('playwrightReportBase64') && !text.includes('data-qa-light')) {
-      text = text.replace('<head>', '<head><script data-qa-light>try{if(!localStorage.theme)localStorage.theme="light-mode"}catch(e){}</script>');
+      text = text.replace('<head>', '<head><meta name="color-scheme" content="only light"><style>:root{color-scheme:only light}</style><script data-qa-light>try{localStorage.theme="light-mode"}catch(e){}</script>');
     }
     fs.writeFileSync(file, mask(text));
   }
